@@ -467,3 +467,47 @@ resource "aws_autoscaling_group" "wp_asg" {
     create_before_destroy = true
   }
 }
+
+#------ Route 53 ----#
+#primary zone
+resource "aws_route53_zone" "primary" {
+  name              = "${var.domain_name}.com"
+  delegation_set_id = var.delegation_set
+}
+
+#WWW
+resource "aws_route53_record" "www" {
+  zone_id = aws_route53_zone.primary.id
+  name    = "www.${var.domain_name}.com"
+  type    = "A"
+
+  alias {
+    name                   = aws_elb.wp-elb.dns_name
+    zone_id                = aws_elb.wp-elb.zone_id
+    evaluate_target_health = true
+  }
+}
+
+#DEV
+resource "aws_route53_record" "dev" {
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = "dev.${var.domain_name}.com"
+  type    = "A"
+  ttl     = "300"
+  records = [aws_instance.wp_dev.public_ip]
+}
+
+#DEV secondary zone
+resource "aws_route53_zone" "secondary" {
+  name   = "${var.domain_name}.com"
+  vpc_id = aws_vpc.wp_vpc.id
+}
+
+#DB record
+resource "aws_route53_record" "db" {
+  zone_id = aws_route53_zone.secondary.zone_id
+  name    = "db.${var.domain_name}.com"
+  type    = "CNAME"
+  ttl     = "300"
+  records = [aws_db_instance.wp_db.address]
+}
