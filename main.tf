@@ -348,6 +348,7 @@ resource "aws_key_pair" "wp_auth" {
   public_key = file(var.public_key_path)
   key_name   = var.key_name
 }
+
 resource "aws_instance" "wp_dev" {
   ami           = var.dev_ami
   instance_type = var.dev_instance_type
@@ -404,5 +405,27 @@ resource "aws_elb" "wp-elb" {
   connection_draining_timeout = 400
   tags = {
     Name = "wp_${var.domain_name}-elb"
+  }
+}
+
+#---- golden AMI ----#
+#random ami id
+resource "random_id" "golden_ami" {
+  byte_length = 3
+}
+
+#AMI
+resource "aws_ami_from_instance" "wp_golden" {
+  name               = "wp_ami-${random_id.golden_ami.b64}"
+  source_instance_id = aws_instance.wp_dev.id
+  provisioner "local-exec" {
+    command = <<EOT
+cat <<EOF > userdata
+#!/bin/bash
+/usr/bin/aws s3 sync s3://${aws_s3_bucket.code.bucket} /var/www/html/
+/bin/touch /var/spool/cron/root
+sudo /bin/echo '*/5 * * * * aws s3 sync 3://${aws_s3_bucket.code.bucket} /var/www/html/' >> /var/spool/cron/root
+EOF
+EOT
   }
 }
