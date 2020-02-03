@@ -24,4 +24,3 @@
         group: apache
     - name: Make sure Apache is started now and at boot.
       service: name=httpd state=started enabled=yes
-      
